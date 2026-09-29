@@ -4,6 +4,7 @@ AGENT_SYSTEM_PROMPT = """
 # 可用工具:
 - `get_weather(city: str)`: 查询指定城市的实时天气。
 - `get_attraction(city: str, weather: str)`: 根据城市和天气搜索推荐的旅游景点。
+- `get_weekday(date_str: str)`: 查询日期对应的星期，日期格式为 YYYY-MM-DD，例如 2026-10-01。
 
 # 输出格式要求:
 你的每次回复必须严格遵循以下格式，包含一对Thought和Action：
@@ -17,7 +18,8 @@ Action的格式必须是以下之一：
 
 # 重要提示:
 - 每次只输出一对Thought-Action
-- Action必须在同一行，不要换行
+- 工具调用的Action必须在同一行；Finish[...]中的最终答案可以换行
+- 用户询问日期对应的星期时，必须调用 get_weekday；日期无效时说明错误，不要编造结果。
 - 当收集到足够信息可以回答用户问题时，必须使用 Action: Finish[最终答案] 格式结束
 
 请开始吧！
@@ -25,6 +27,8 @@ Action的格式必须是以下之一：
 
 
 import requests
+import sys
+from datetime import date
 
 def get_weather(city: str) -> str:
     """
@@ -105,11 +109,36 @@ def get_attraction(city: str, weather: str) -> str:
         return f"错误：执行Tavily搜索时出现问题 - {e}"
 
 
+def get_weekday(date_str: str) -> str:
+    """查询日期对应的星期，不需要网络或 API 密钥。"""
+    try:
+        travel_date = date.fromisoformat(date_str)
+        if travel_date.isoformat() != date_str:
+            raise ValueError("日期格式必须是 YYYY-MM-DD")
+    except (TypeError, ValueError):
+        return "错误：请提供 YYYY-MM-DD 格式的有效日期，例如 2026-10-01。"
+
+    weekday = "一二三四五六日"[travel_date.weekday()]
+    return f"{date_str}是星期{weekday}"
+
+
 # 将所有工具函数放入一个字典，方便后续调用
 available_tools = {
     "get_weather": get_weather,
     "get_attraction": get_attraction,
+    "get_weekday": get_weekday,
 }
+
+# 本地自检：python FirstAgentTest.py --test-weekday，不调用模型或搜索服务。
+if __name__ == "__main__" and sys.argv[1:] == ["--test-weekday"]:
+    assert available_tools["get_weekday"](date_str="2026-10-01") == "2026-10-01是星期四"
+    assert get_weekday("2026-09-28") == "2026-09-28是星期一"
+    assert get_weekday("2026-09-27") == "2026-09-27是星期日"
+    assert get_weekday("2024-02-29") == "2024-02-29是星期四"
+    for invalid in ("2026-02-30", "2026-02-29", "20261001", "2026-1-1", "", None):
+        assert get_weekday(invalid).startswith("错误：")
+    print("get_weekday 自检通过")
+    sys.exit(0)
 
 from openai import OpenAI
 
@@ -123,7 +152,7 @@ class OpenAICompatibleClient:
 
     def generate(self, prompt: str, system_prompt: str) -> str:
         """调用LLM API来生成回应。"""
-        print("正在调用大语言模型...")
+        print("正在调用大语言模型...")      
         try:
             messages = [
                 {'role': 'system', 'content': system_prompt},
@@ -156,7 +185,10 @@ llm = OpenAICompatibleClient(
 )
 
 # --- 2. 初始化 ---
-user_prompt = "你好，请帮我查询一下今天北京的天气，然后根据天气推荐一个合适的旅游景点。"
+user_prompt = (
+    "请查询2026年10月1日是星期几。"
+    "另外，查询今天杭州的天气，并根据今天的天气推荐几个景点。"
+)
 prompt_history = [f"用户请求: {user_prompt}"]
 
 print(f"用户输入: {user_prompt}\n" + "="*40)
@@ -191,7 +223,13 @@ for i in range(5): # 设置最大循环次数
     action_str = action_match.group(1).strip()
 
     if action_str.startswith("Finish"):
-        final_answer = re.match(r"Finish\[(.*)\]", action_str).group(1)
+        final_match = re.fullmatch(r"Finish\[(.*)\]", action_str, re.DOTALL)
+        if not final_match:
+            observation_str = "Observation: 错误：结束格式无效，请使用 Finish[最终答案]，确保方括号完整。"
+            print(f"{observation_str}\n" + "="*40)
+            prompt_history.append(observation_str)
+            continue
+        final_answer = final_match.group(1)
         print(f"任务完成，最终答案: {final_answer}")
         break
     
