@@ -4,7 +4,10 @@ AGENT_SYSTEM_PROMPT = """
 # 可用工具:
 - `get_weather(city: str)`: 查询指定城市的实时天气。
 - `get_attraction(city: str, weather: str)`: 根据城市和天气搜索推荐的旅游景点。
+<<<<<<< HEAD
 - `get_weekday(date_str: str)`: 查询日期对应的星期，日期格式为 YYYY-MM-DD，例如 2026-10-01。
+=======
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
 
 # 输出格式要求:
 你的每次回复必须严格遵循以下格式，包含一对Thought和Action：
@@ -18,8 +21,12 @@ Action的格式必须是以下之一：
 
 # 重要提示:
 - 每次只输出一对Thought-Action
+<<<<<<< HEAD
 - 工具调用的Action必须在同一行；Finish[...]中的最终答案可以换行
 - 用户询问日期对应的星期时，必须调用 get_weekday；日期无效时说明错误，不要编造结果。
+=======
+- Action必须在同一行，不要换行
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
 - 当收集到足够信息可以回答用户问题时，必须使用 Action: Finish[最终答案] 格式结束
 
 请开始吧！
@@ -27,8 +34,11 @@ Action的格式必须是以下之一：
 
 
 import requests
+<<<<<<< HEAD
 import sys
 from datetime import date
+=======
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
 
 def get_weather(city: str) -> str:
     """
@@ -61,12 +71,18 @@ def get_weather(city: str) -> str:
         return f"错误：解析天气数据失败，可能是城市名称无效 - {e}"
 
 
+<<<<<<< HEAD
 # 读取环境变量和初始化Tavily客户端
 import os
 from dotenv import load_dotenv
 from tavily import TavilyClient
 
 load_dotenv()
+=======
+
+import os
+from tavily import TavilyClient
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
 
 def get_attraction(city: str, weather: str) -> str:
     """
@@ -109,6 +125,7 @@ def get_attraction(city: str, weather: str) -> str:
         return f"错误：执行Tavily搜索时出现问题 - {e}"
 
 
+<<<<<<< HEAD
 def get_weekday(date_str: str) -> str:
     """查询日期对应的星期，不需要网络或 API 密钥。"""
     try:
@@ -122,10 +139,13 @@ def get_weekday(date_str: str) -> str:
     return f"{date_str}是星期{weekday}"
 
 
+=======
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
 # 将所有工具函数放入一个字典，方便后续调用
 available_tools = {
     "get_weather": get_weather,
     "get_attraction": get_attraction,
+<<<<<<< HEAD
     "get_weekday": get_weekday,
 }
 
@@ -140,6 +160,10 @@ if __name__ == "__main__" and sys.argv[1:] == ["--test-weekday"]:
     print("get_weekday 自检通过")
     sys.exit(0)
 
+=======
+}
+
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
 from openai import OpenAI
 
 class OpenAICompatibleClient:
@@ -152,7 +176,11 @@ class OpenAICompatibleClient:
 
     def generate(self, prompt: str, system_prompt: str) -> str:
         """调用LLM API来生成回应。"""
+<<<<<<< HEAD
         print("正在调用大语言模型...")      
+=======
+        print("正在调用大语言模型...")
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
         try:
             messages = [
                 {'role': 'system', 'content': system_prompt},
@@ -174,9 +202,16 @@ import re
 
 # --- 1. 配置LLM客户端 ---
 # 请根据您使用的服务，将这里替换成对应的凭证和地址
+<<<<<<< HEAD
 API_KEY = os.environ["OPENAI_API_KEY"]
 BASE_URL = os.environ["OPENAI_BASE_URL"]
 MODEL_ID = os.environ["MODEL_NAME"]
+=======
+API_KEY = "YOUR_API_KEY"
+BASE_URL = "YOUR_BASE_URL"
+MODEL_ID = "YOUR_MODEL_ID"
+os.environ['TAVILY_API_KEY'] = "YOUR_TAVILY_API_KEY"
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
 
 llm = OpenAICompatibleClient(
     model=MODEL_ID,
@@ -185,10 +220,14 @@ llm = OpenAICompatibleClient(
 )
 
 # --- 2. 初始化 ---
+<<<<<<< HEAD
 user_prompt = (
     "请查询2026年10月1日是星期几。"
     "另外，查询今天杭州的天气，并根据今天的天气推荐几个景点。"
 )
+=======
+user_prompt = "你好，请帮我查询一下今天北京的天气，然后根据天气推荐一个合适的旅游景点。"
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
 prompt_history = [f"用户请求: {user_prompt}"]
 
 print(f"用户输入: {user_prompt}\n" + "="*40)
@@ -223,6 +262,7 @@ for i in range(5): # 设置最大循环次数
     action_str = action_match.group(1).strip()
 
     if action_str.startswith("Finish"):
+<<<<<<< HEAD
         final_match = re.fullmatch(r"Finish\[(.*)\]", action_str, re.DOTALL)
         if not final_match:
             observation_str = "Observation: 错误：结束格式无效，请使用 Finish[最终答案]，确保方括号完整。"
@@ -230,6 +270,9 @@ for i in range(5): # 设置最大循环次数
             prompt_history.append(observation_str)
             continue
         final_answer = final_match.group(1)
+=======
+        final_answer = re.match(r"Finish\[(.*)\]", action_str).group(1)
+>>>>>>> 8c57a6c86a1e23af731b345ba69ab910b8b2d735
         print(f"任务完成，最终答案: {final_answer}")
         break
     
