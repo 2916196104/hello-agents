@@ -2,9 +2,44 @@ from dotenv import load_dotenv
 # 加载 .env 文件中的环境变量
 load_dotenv()
 
+import ast
+import math
+import operator
 import os
 from serpapi import SerpApiClient
 from typing import Dict, Any
+
+def calculator(expression: str) -> str:
+    """只计算数字、括号和四则运算，不执行输入中的代码。"""
+    expression = expression.strip().replace("×", "*").replace("÷", "/")
+    if not expression or len(expression) > 200:
+        return "错误：请输入不超过200个字符的算术表达式。"
+    operators = {ast.Add: operator.add, ast.Sub: operator.sub,
+                 ast.Mult: operator.mul, ast.Div: operator.truediv}
+
+    def evaluate(node):
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            return node.value
+        if isinstance(node, ast.BinOp) and type(node.op) in operators:
+            return operators[type(node.op)](evaluate(node.left), evaluate(node.right))
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            value = evaluate(node.operand)
+            return value if isinstance(node.op, ast.UAdd) else -value
+        raise ValueError("只支持数字、括号以及 +、-、*、/ 运算")
+
+    try:
+        tree = ast.parse(expression, mode="eval")
+        if sum(1 for _ in ast.walk(tree)) > 100:
+            raise ValueError("表达式过于复杂，请拆分计算")
+        # ponytail: 使用浮点除法，金额或精确小数场景改用 Decimal。
+        result = evaluate(tree.body)
+        if not math.isfinite(result):
+            raise ValueError("计算结果超出支持的数值范围")
+        return str(result)
+    except ZeroDivisionError:
+        return "错误：除数不能为0。"
+    except (SyntaxError, ValueError, OverflowError) as error:
+        return f"错误：无法计算表达式（{error}）。"
 
 def search(query: str) -> str:
     """

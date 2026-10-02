@@ -1,6 +1,6 @@
 import re
 from llm_client import HelloAgentsLLM
-from tools import ToolExecutor, search
+from tools import ToolExecutor, search, calculator
 
 # (此处省略 REACT_PROMPT_TEMPLATE 的定义)
 REACT_PROMPT_TEMPLATE = """
@@ -8,6 +8,8 @@ REACT_PROMPT_TEMPLATE = """
 
 可用工具如下：
 {tools}
+
+遇到数学计算时，必须先调用 Calculator 获取结果，再根据 Observation 给出最终答案。
 
 请严格按照以下格式进行回应：
 
@@ -66,6 +68,7 @@ class ReActAgent:
             observation = tool_function(tool_input) if tool_function else f"错误：未找到名为 '{tool_name}' 的工具。"
             
             print(f"👀 观察: {observation}")
+            # 保存执行记录，供下一轮使用
             self.history.append(f"Action: {action}")
             self.history.append(f"Observation: {observation}")
 
@@ -94,6 +97,7 @@ if __name__ == '__main__':
     tool_executor = ToolExecutor()
     search_desc = "一个网页搜索引擎。当你需要回答关于时事、事实以及在你的知识库中找不到的信息时，应使用此工具。"
     tool_executor.registerTool("Search", search_desc, search)
+    tool_executor.registerTool("Calculator", "计算数学表达式，支持括号、小数、负数和四则运算（+、-、*、/，也支持×、÷）。输入仅包含表达式，例如 Calculator[(123 + 456) * 789 / 12]。", calculator)
     agent = ReActAgent(llm_client=llm, tool_executor=tool_executor)
-    question = "华为最新的手机是哪一款？它的主要卖点是什么？"
+    question = "计算 (123 + 456) × 789 / 12 = ?"
     agent.run(question)
