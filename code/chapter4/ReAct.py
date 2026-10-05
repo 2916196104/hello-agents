@@ -10,6 +10,8 @@ REACT_PROMPT_TEMPLATE = """
 {tools}
 
 遇到数学计算时，必须先调用 Calculator 获取结果，再根据 Observation 给出最终答案。
+工具调用失败时，根据 Observation 的错误原因修正工具名称或参数；不要把错误信息当作成功结果。
+如果缺少必要信息且无法继续，可用 Finish[无法完成：请补充所需信息] 如实说明。
 
 请严格按照以下格式进行回应：
 
@@ -26,15 +28,19 @@ History: {history}
 """
 
 class ReActAgent:
-    def __init__(self, llm_client: HelloAgentsLLM, tool_executor: ToolExecutor, max_steps: int = 5):
+    def __init__(self, llm_client: HelloAgentsLLM, tool_executor: ToolExecutor, max_steps: int = 5, max_tool_failures: int = 3):
+        if not isinstance(max_tool_failures, int) or max_tool_failures < 1:
+            raise ValueError("max_tool_failures 必须是正整数。")
         self.llm_client = llm_client
         self.tool_executor = tool_executor
         self.max_steps = max_steps
+        self.max_tool_failures = max_tool_failures
         self.history = []
 
     def run(self, question: str):
         self.history = []
         current_step = 0
+        consecutive_failures = 0
 
         while current_step < self.max_steps:
             current_step += 1
@@ -47,30 +53,43 @@ class ReActAgent:
             messages = [{"role": "user", "content": prompt}]
             response_text = self.llm_client.think(messages=messages)
             if not response_text:
-                print("错误：LLM未能返回有效响应。"); break
+                print("错误：LLM未能返回有效响应。")
+                return None
 
             thought, action = self._parse_output(response_text)
             if thought: print(f"🤔 思考: {thought}")
-            if not action: print("警告：未能解析出有效的Action，流程终止。"); break
-            
-            if action.startswith("Finish"):
+            tool_name, tool_input = self._parse_action(action or "")
+            if tool_name == "Finish" and tool_input.strip():
                 # 如果是Finish指令，提取最终答案并结束
-                final_answer = self._parse_action_input(action)
+                final_answer = tool_input
                 print(f"🎉 最终答案: {final_answer}")
                 return final_answer
             
-            tool_name, tool_input = self._parse_action(action)
-            if not tool_name or not tool_input:
-                self.history.append("Observation: 无效的Action格式，请检查。"); continue
+            if not tool_name or tool_name == "Finish":
+                success, observation = False, "错误：Action 格式无效或最终答案为空。"
+            else:
+                print(f"🎬 行动: {tool_name}[{tool_input}]")
+                success, observation = self.tool_executor.executeTool(tool_name, tool_input)
 
-            print(f"🎬 行动: {tool_name}[{tool_input}]")
-            tool_function = self.tool_executor.getTool(tool_name)
-            observation = tool_function(tool_input) if tool_function else f"错误：未找到名为 '{tool_name}' 的工具。"
+            consecutive_failures = 0 if success else consecutive_failures + 1
+            if not success:
+                observation += (
+                    f"\n纠正提示：连续失败 {consecutive_failures}/{self.max_tool_failures} 次。"
+                    "检查工具用途、名称和参数；下一轮只输出一个 Action: 工具名[非空参数]。"
+                    f"\n可用工具及参数说明：\n{tools_desc}"
+                )
+                if consecutive_failures >= 2:
+                    observation += "\n请重新选择合适工具或修改参数，不要重复失败的调用；缺少信息时请明确说明。"
             
             print(f"👀 观察: {observation}")
             # 保存执行记录，供下一轮使用
-            self.history.append(f"Action: {action}")
+            self.history.append(f"Action: {action or '（缺失）'}")
             self.history.append(f"Observation: {observation}")
+            if consecutive_failures >= self.max_tool_failures:
+                message = f"工具调用已连续失败 {consecutive_failures} 次，停止执行；请检查工具配置或补充参数后重试。"
+                self.history.append(f"Observation: {message}")
+                print(message)
+                return None
 
         print("已达到最大步数，流程终止。")
         return None
@@ -85,7 +104,7 @@ class ReActAgent:
         return thought, action
 
     def _parse_action(self, action_text: str):
-        match = re.match(r"(\w+)\[(.*)\]", action_text, re.DOTALL)
+        match = re.fullmatch(r"(\w+)\[(.*)\]", action_text.strip(), re.DOTALL)
         return (match.group(1), match.group(2)) if match else (None, None)
 
     def _parse_action_input(self, action_text: str):

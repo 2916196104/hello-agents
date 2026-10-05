@@ -108,6 +108,24 @@ class ToolExecutor:
         """
         return self.tools.get(name, {}).get("func")
 
+    def executeTool(self, name: str, tool_input: str) -> tuple[bool, str]:
+        """统一检查并执行工具，返回是否成功及可反馈给模型的结果。"""
+        tool = self.getTool(name)
+        if tool is None:
+            return False, f"错误：未找到工具 '{name}'。请从已注册工具中选择，名称区分大小写。"
+        if not isinstance(tool_input, str) or not tool_input.strip():
+            return False, "错误：工具参数必须是非空字符串，请根据工具说明补充参数。"
+        try:
+            result = tool(tool_input)
+        except Exception as error:
+            return False, f"错误：工具 '{name}' 执行失败（{type(error).__name__}: {error}）。"
+        if result is None or not str(result).strip():
+            return False, f"错误：工具 '{name}' 未返回有效结果。"
+        observation = str(result)
+        # ponytail: 当前工具用文本表示错误，新增工具较多时改为结构化结果。
+        failed = observation.lstrip().startswith(("错误：", "搜索时发生错误:"))
+        return not failed, observation
+
     def getAvailableTools(self) -> str:
         """
         获取所有可用工具的格式化描述字符串。
@@ -136,10 +154,6 @@ if __name__ == '__main__':
     tool_name = "Search"
     tool_input = "英伟达最新的GPU型号是什么"
 
-    tool_function = toolExecutor.getTool(tool_name)
-    if tool_function:
-        observation = tool_function(tool_input)
-        print("--- 观察 (Observation) ---")
-        print(observation)
-    else:
-        print(f"错误：未找到名为 '{tool_name}' 的工具。")
+    success, observation = toolExecutor.executeTool(tool_name, tool_input)
+    print("--- 观察 (Observation) ---")
+    print(observation)
