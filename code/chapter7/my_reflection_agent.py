@@ -41,7 +41,6 @@ DEFAULT_PROMPTS = {
 """,
 }
 
-
 class MyReflectionAgent(ReflectionAgent):
     """支持通用任务和自定义提示词的反思智能体。"""
 
@@ -77,10 +76,11 @@ class MyReflectionAgent(ReflectionAgent):
 
         # 当前任务的执行轨迹重新开始，对话历史由 Agent 基类独立保存。
         self.memory.records.clear()
+        # 根据原始任务生成初稿。
         initial_prompt = self.prompts["initial"].format(task=input_text)
         result = self._get_llm_response(initial_prompt, **kwargs)
         self.memory.add_record("execution", result)
-
+       # 把当前版本交给模型审查。
         for iteration in range(self.max_iterations):
             print(f"\n--- 第 {iteration + 1}/{self.max_iterations} 轮反思 ---")
             reflect_prompt = self.prompts["reflect"].format(
@@ -94,13 +94,13 @@ class MyReflectionAgent(ReflectionAgent):
             if verdict in ("无需改进", "no need for improvement"):
                 print("\n✅ 无需改进，任务完成。")
                 break
-
+            # 根据反馈生成新版本。
             refine_prompt = self.prompts["refine"].format(
                 task=input_text, last_attempt=result, feedback=feedback
             )
             result = self._get_llm_response(refine_prompt, **kwargs)
             self.memory.add_record("execution", result)
-
+       # 存最终结果，返回调用方。
         self.add_message(Message(input_text, "user"))
         self.add_message(Message(result, "assistant"))
         print(f"\n--- 任务完成 ---\n最终结果:\n{result}")
