@@ -1,7 +1,8 @@
 # my_simple_agent.py
-from typing import Optional, Iterator
-from hello_agents import SimpleAgent, HelloAgentsLLM, Config, Message
 import re
+from typing import Optional, Iterator
+
+from hello_agents import SimpleAgent, HelloAgentsLLM, Config, Message, ToolRegistry
 
 class MySimpleAgent(SimpleAgent):
     """
@@ -15,11 +16,11 @@ class MySimpleAgent(SimpleAgent):
         llm: HelloAgentsLLM,
         system_prompt: Optional[str] = None,
         config: Optional[Config] = None,
-        tool_registry: Optional['ToolRegistry'] = None,
+        tool_registry: Optional[ToolRegistry] = None,
         enable_tool_calling: bool = True
     ):
         super().__init__(name, llm, system_prompt, config)
-        self.tool_registry = tool_registry
+        self.tool_registry: Optional[ToolRegistry] = tool_registry
         self.enable_tool_calling = enable_tool_calling and tool_registry is not None
         print(f"✅ {name} 初始化完成，工具调用: {'启用' if self.enable_tool_calling else '禁用'}")
     
@@ -58,11 +59,12 @@ class MySimpleAgent(SimpleAgent):
         """构建增强的系统提示词，包含工具信息"""
         base_prompt = self.system_prompt or "你是一个有用的AI助手。"
 
-        if not self.enable_tool_calling or not self.tool_registry:
+        tool_registry = self.tool_registry
+        if not self.enable_tool_calling or tool_registry is None:
             return base_prompt
 
         # 获取工具描述
-        tools_description = self.tool_registry.get_tools_description()
+        tools_description = tool_registry.get_tools_description()
         if not tools_description or tools_description == "暂无可用工具":
             return base_prompt
 
@@ -127,7 +129,8 @@ class MySimpleAgent(SimpleAgent):
 
         return final_response
 
-    def _parse_tool_calls(self, text: str) -> list:
+    @staticmethod
+    def _parse_tool_calls(text: str) -> list[dict[str, str]]:
         """解析文本中的工具调用"""
         pattern = r'\[TOOL_CALL:([^:]+):([^\]]+)\]'
         matches = re.findall(pattern, text)
@@ -144,19 +147,20 @@ class MySimpleAgent(SimpleAgent):
 
     def _execute_tool_call(self, tool_name: str, parameters: str) -> str:
         """执行工具调用"""
-        if not self.tool_registry:
+        tool_registry = self.tool_registry
+        if tool_registry is None:
             return f"❌ 错误：未配置工具注册表"
 
         try:
             # 智能参数解析
             if tool_name == 'calculator':
                 # 计算器工具直接传入表达式
-                result = self.tool_registry.execute_tool(tool_name, parameters)
+                result = tool_registry.execute_tool(tool_name, parameters)
             else:
                 # 其他工具使用智能参数解析
                 param_dict = self._parse_tool_parameters(tool_name, parameters)
-                tool = self.tool_registry.get_tool(tool_name)
-                if not tool:
+                tool = tool_registry.get_tool(tool_name)
+                if tool is None:
                     return f"❌ 错误：未找到工具 '{tool_name}'"
                 result = tool.run(param_dict)
 
@@ -165,7 +169,8 @@ class MySimpleAgent(SimpleAgent):
         except Exception as e:
             return f"❌ 工具调用失败：{str(e)}"
 
-    def _parse_tool_parameters(self, tool_name: str, parameters: str) -> dict:
+    @staticmethod
+    def _parse_tool_parameters(tool_name: str, parameters: str) -> dict[str, str]:
         """智能解析工具参数"""
         param_dict = {}
 
@@ -225,12 +230,13 @@ class MySimpleAgent(SimpleAgent):
 
     def add_tool(self, tool) -> None:
         """添加工具到Agent（便利方法）"""
-        if not self.tool_registry:
-            from hello_agents import ToolRegistry
-            self.tool_registry = ToolRegistry()
+        tool_registry = self.tool_registry
+        if tool_registry is None:
+            tool_registry = ToolRegistry()
+            self.tool_registry = tool_registry
             self.enable_tool_calling = True
 
-        self.tool_registry.register_tool(tool)
+        tool_registry.register_tool(tool)
         print(f"🔧 工具 '{tool.name}' 已添加")
 
     def has_tools(self) -> bool:
@@ -239,13 +245,15 @@ class MySimpleAgent(SimpleAgent):
     
     def remove_tool(self, tool_name: str) -> bool:
         """移除工具（便利方法）"""
-        if self.tool_registry:
-            self.tool_registry.unregister(tool_name)
-            return True
-        return False
+        tool_registry = self.tool_registry
+        if tool_registry is None:
+            return False
+        tool_registry.unregister(tool_name)
+        return True
     
-    def list_tools(self) -> list:
+    def list_tools(self) -> list[str]:
         """列出所有可用工具"""
-        if self.tool_registry:
-            return self.tool_registry.list_tools()
-        return []
+        tool_registry = self.tool_registry
+        if tool_registry is None:
+            return []
+        return tool_registry.list_tools()
