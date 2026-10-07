@@ -1,6 +1,7 @@
 """直接运行本文件，体验通用写作和自定义代码生成的反思流程。"""
 
 from pathlib import Path
+import os
 
 from dotenv import load_dotenv
 
@@ -14,7 +15,9 @@ def main() -> None:
     from hello_agents import HelloAgentsLLM
     from my_reflection_agent import MyReflectionAgent
 
-    llm = HelloAgentsLLM()
+    # 反思需要重复调用模型，为较慢的响应留出时间；.env 可覆盖此默认值。
+    llm = HelloAgentsLLM(timeout=int(os.getenv("LLM_TIMEOUT", "180")))
+    print(f"当前模型: {llm.model}；请求超时配置: {llm.timeout} 秒\n")
 
     print("=== 示例一：使用默认提示词写文章 ===")
     general_agent = MyReflectionAgent(
