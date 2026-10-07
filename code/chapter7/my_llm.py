@@ -5,6 +5,8 @@ from openai import OpenAI
 from hello_agents import HelloAgentsLLM
 
 class MyLLM(HelloAgentsLLM):
+    """通过继承扩展 Gemini，保留 ModelScope 和父类的其他供应商。"""
+
     def __init__(
         self,
         model: Optional[str] = None,
@@ -13,8 +15,29 @@ class MyLLM(HelloAgentsLLM):
         provider: Optional[str] = "auto",
         **kwargs
     ):
-        # 检查provider是否为我们想处理的'modelscope'
-        if provider == "modelscope":
+        # 与 Google SDK 一致：两个密钥同时存在时 GOOGLE_API_KEY 优先。
+        gemini_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if provider in (None, "auto"):
+            provider = "gemini" if gemini_key else None
+
+        if provider == "gemini":
+            resolved_key = (api_key or gemini_key or "").strip()
+            if not resolved_key:
+                raise ValueError("请设置 GEMINI_API_KEY / GOOGLE_API_KEY，或传入 api_key。")
+
+            # Gemini 的 OpenAI 兼容接口允许直接继承 invoke/think/stream_invoke。
+            # 使用供应商专属配置，避免仓库的 LLM_* 指向其他平台。
+            super().__init__(
+                model=model or os.getenv("GEMINI_MODEL") or "gemini-3.8-flash",
+                api_key=resolved_key,
+                base_url=base_url or os.getenv("GEMINI_BASE_URL")
+                or "https://generativelanguage.googleapis.com/v1beta/openai/",
+                provider="auto",
+                **kwargs,
+            )
+            self.provider = "gemini"
+
+        elif provider == "modelscope":
             print("正在使用自定义的 ModelScope Provider")
             self.provider = "modelscope"
             
