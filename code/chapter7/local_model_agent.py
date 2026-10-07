@@ -1,6 +1,7 @@
 """第七章：通过 HelloAgentsLLM 调用本地 Ollama 或 vLLM 服务。"""
 
 import argparse
+import os
 
 
 def main() -> None:
@@ -9,6 +10,13 @@ def main() -> None:
     parser.add_argument("--model", help="模型名称，必须与服务中已加载的模型一致")
     parser.add_argument("--base-url", help="本地模型服务的 OpenAI 兼容接口地址")
     args = parser.parse_args()
+
+    # 本机模型接口绕过代理，保留其他地址的现有代理配置。
+    no_proxy = ",".join(filter(None, (
+        os.environ.get("no_proxy") or os.environ.get("NO_PROXY"),
+        "localhost,127.0.0.1,::1",
+    )))
+    os.environ["NO_PROXY"] = os.environ["no_proxy"] = no_proxy
 
     from hello_agents import HelloAgentsLLM, SimpleAgent
 
