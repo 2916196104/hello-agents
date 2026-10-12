@@ -1,4 +1,6 @@
 # HelloAgents 0.2.0 使用旧版 SearchRequest 和 QdrantClient.search 接口。
 qdrant-client==1.15.1
-gradio>=6,<7
+gradio==6.17.3
+# 与现有文本模型依赖保持兼容。
+huggingface-hub>=0.34,<1
 pypdf>=6,<7

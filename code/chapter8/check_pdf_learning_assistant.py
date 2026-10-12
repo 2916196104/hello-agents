@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
+import httpx
 import pdf_rag_tool
 
 
@@ -131,6 +132,24 @@ class PDFLearningAssistantChecks(unittest.TestCase):
         self.assertTrue(launch.call_args.kwargs["inbrowser"])
         self.assertIsNone(launch.call_args.kwargs["server_port"])
         launch.call_args.args[0].close()
+
+    def test_web_page_is_served(self):
+        with patch.dict(os.environ, {
+            "GRADIO_ANALYTICS_ENABLED": "False",
+            "NO_PROXY": "localhost,127.0.0.1",
+            "no_proxy": "localhost,127.0.0.1",
+        }):
+            demo = app.create_gradio_ui()
+            self.addCleanup(demo.close)
+            _, url, _ = demo.launch(
+                server_name="127.0.0.1", server_port=None,
+                inbrowser=False, prevent_thread_lock=True, quiet=True,
+            )
+            with httpx.Client(trust_env=False, timeout=10) as client:
+                self.assertEqual(client.get(url).status_code, 200)
+                config = client.get(url + "config")
+                self.assertEqual(config.status_code, 200)
+                self.assertEqual(config.json()["title"], "智能文档问答助手")
 
 
 class PDFIngestionChecks(unittest.TestCase):
