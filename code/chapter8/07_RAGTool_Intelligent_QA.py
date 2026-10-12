@@ -6,9 +6,11 @@
 """
 
 import time
-from hello_agents.tools import RAGTool
 from dotenv import load_dotenv
+
 load_dotenv()
+
+from hello_agents.tools import RAGTool
 
 class IntelligentQADemo:
     """智能问答演示类"""
@@ -18,7 +20,15 @@ class IntelligentQADemo:
             knowledge_base_path="./qa_demo_kb",
             rag_namespace="intelligent_qa_demo"
         )
+        if not self.rag_tool.initialized:
+            raise RuntimeError(f"RAG工具初始化失败: {self.rag_tool.init_error}")
         self._setup_knowledge_base()
+
+    def _run_rag(self, parameters: dict) -> str:
+        result = self.rag_tool.run(parameters)
+        if result.startswith("❌"):
+            raise RuntimeError(result)
+        return result
     
     def _setup_knowledge_base(self):
         """设置知识库"""
@@ -174,9 +184,11 @@ class IntelligentQADemo:
         
         # 批量添加知识文档
         for doc in knowledge_documents:
-            result = self.rag_tool.run({"action":"add_text",
+            result = self._run_rag({"action":"add_text",
                                          "text":doc["content"],
                                          "document_id":doc["id"]})
+            if not result.startswith("✅"):
+                raise RuntimeError(f"添加知识文档 {doc['id']} 失败: {result}")
             print(f"✅ 添加知识文档: {doc['id']}")
         
         print(f"📊 知识库设置完成")
@@ -239,7 +251,7 @@ class IntelligentQADemo:
                 print(f"\n❓ 问题: {question}")
                 
                 start_time = time.time()
-                answer = self.rag_tool.run({"action":"ask",
+                answer = self._run_rag({"action":"ask",
                                              "question":question,
                                              "limit":3,
                                              "include_citations":True})
@@ -269,7 +281,7 @@ class IntelligentQADemo:
         
         # 先进行搜索，查看检索到的片段
         print(f"\n🔍 第一步：检索相关片段")
-        search_result = self.rag_tool.run({"action":"search",
+        search_result = self._run_rag({"action":"search",
                                             "query":complex_question,
                                             "limit":4,
                                             "enable_advanced_search":True})
@@ -278,7 +290,7 @@ class IntelligentQADemo:
         # 然后进行智能问答，查看完整的上下文构建
         print(f"\n🤖 第二步：构建上下文并生成答案")
         start_time = time.time()
-        qa_result = self.rag_tool.run({"action":"ask",
+        qa_result = self._run_rag({"action":"ask",
                                         "question":complex_question,
                                         "limit":4,
                                         "enable_advanced_search":True,
@@ -334,7 +346,7 @@ class IntelligentQADemo:
             
             # 执行问答
             start_time = time.time()
-            answer = self.rag_tool.run({"action":"ask",
+            answer = self._run_rag({"action":"ask",
                                          "question":question,
                                          "limit":4,
                                          "enable_advanced_search":True,
@@ -467,7 +479,7 @@ class IntelligentQADemo:
             
             # 这里简化演示，实际的提示词工程在RAGTool内部实现
             start_time = time.time()
-            answer = self.rag_tool.run({"action":"ask",
+            answer = self._run_rag({"action":"ask",
                                          "question":test_question,
                                          "limit":3})
             response_time = time.time() - start_time
@@ -499,13 +511,13 @@ class IntelligentQADemo:
             print(f"\n❓ 问题: {question}")
             
             # 启用引用的问答
-            answer_with_citations = self.rag_tool.run({"action":"ask",
+            answer_with_citations = self._run_rag({"action":"ask",
                                                         "question":question,
                                                         "limit":3,
                                                         "include_citations":True})
             
             # 禁用引用的问答对比
-            answer_without_citations = self.rag_tool.run({"action":"ask",
+            answer_without_citations = self._run_rag({"action":"ask",
                                                            "question":question,
                                                            "limit":3,
                                                            "include_citations":False})
@@ -568,6 +580,7 @@ def main():
         print(f"\n❌ 演示过程中发生错误: {e}")
         import traceback
         traceback.print_exc()
+        raise SystemExit(1)
 
 if __name__ == "__main__":
     main()

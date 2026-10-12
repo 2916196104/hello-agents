@@ -15,10 +15,20 @@ load_dotenv()
 import os
 import time
 import json
+import inspect
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
-from hello_agents.tools import MemoryTool, RAGTool
+from typing import Dict, List, Optional, Any, Tuple, TypedDict
+from hello_agents.tools import MemoryTool
+from pdf_rag_tool import PDFRAGTool, ProgressCallback
 import gradio as gr
+
+
+class LearningStats(TypedDict):
+    session_start: datetime
+    documents_loaded: int
+    questions_asked: int
+    concepts_learned: int
+
 
 class PDFLearningAssistant:
     """智能文档问答助手"""
@@ -34,10 +44,10 @@ class PDFLearningAssistant:
 
         # 初始化工具
         self.memory_tool = MemoryTool(user_id=user_id)
-        self.rag_tool = RAGTool(rag_namespace=f"pdf_{user_id}")
+        self.rag_tool = PDFRAGTool(rag_namespace=f"pdf_{user_id}")
 
         # 学习统计
-        self.stats = {
+        self.stats: LearningStats = {
             "session_start": datetime.now(),
             "documents_loaded": 0,
             "questions_asked": 0,
@@ -45,9 +55,10 @@ class PDFLearningAssistant:
         }
 
         # 当前加载的文档
-        self.current_document = None
+        self.current_document: Optional[str] = None
+        self.loading_document = False
 
-    def load_document(self, pdf_path: str) -> Dict[str, Any]:
+    def load_document(self, pdf_path: str, progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
         """加载PDF文档到知识库
 
         Args:
@@ -58,17 +69,24 @@ class PDFLearningAssistant:
         """
         if not os.path.exists(pdf_path):
             return {"success": False, "message": f"文件不存在: {pdf_path}"}
+        if self.loading_document:
+            return {"success": False, "message": "已有文档正在加载，请等待加载完成"}
 
         start_time = time.time()
+        self.loading_document = True
 
         try:
             # 使用RAG工具处理PDF
             result = self.rag_tool.run({
                 "action":"add_document",
                 "file_path":pdf_path,
+                "namespace":self.rag_tool.rag_namespace,
                 "chunk_size":1000,
-                "chunk_overlap":200
+                "chunk_overlap":200,
+                "progress":progress
             })
+            if not result.startswith("✅"):
+                return {"success": False, "message": result}
 
             process_time = time.time() - start_time
 
@@ -85,6 +103,8 @@ class PDFLearningAssistant:
                 "event_type":"document_loaded",
                 "session_id":self.session_id
             })
+            if progress is not None:
+                progress(1, "加载完成，可以开始提问")
 
             return {
                 "success": True,
@@ -96,8 +116,10 @@ class PDFLearningAssistant:
                 "success": False,
                 "message": f"加载失败: {str(e)}"
             }
+        finally:
+            self.loading_document = False
 
-    def ask(self, question: str, use_advanced_search: bool = True) -> str:
+    def ask(self, question: str, use_advanced_search: bool = False) -> str:
         """向文档提问
 
         Args:
@@ -107,6 +129,8 @@ class PDFLearningAssistant:
         Returns:
             str: 答案
         """
+        if self.loading_document:
+            return "⏳ 文档正在加载，请等加载完成后再提问。"
         if not self.current_document:
             return "⚠️ 请先加载文档！使用 load_document() 方法加载PDF文档。"
 
@@ -123,11 +147,16 @@ class PDFLearningAssistant:
         answer = self.rag_tool.run({
             "action":"ask",
             "question":question,
+            "namespace":self.rag_tool.rag_namespace,
             "limit":5,
             "enable_advanced_search":use_advanced_search,
             "enable_mqe":use_advanced_search,
             "enable_hyde":use_advanced_search
         })
+        if answer.startswith("❌"):
+            if "429" in answer:
+                return "❌ 模型服务限流或额度不足（429）。请稍后重试，或检查模型服务的额度。"
+            return answer
 
         # 记录到情景记忆
         self.memory_tool.run({
@@ -207,7 +236,7 @@ class PDFLearningAssistant:
         memory_summary = self.memory_tool.run({"action":"summary", "limit":10})
 
         # 获取RAG统计
-        rag_stats = self.rag_tool.run({"action":"stats"})
+        rag_stats = self.rag_tool.run({"action":"stats", "namespace":self.rag_tool.rag_namespace})
 
         # 生成报告
         duration = (datetime.now() - self.stats["session_start"]).total_seconds()
@@ -243,39 +272,46 @@ class PDFLearningAssistant:
 
 
 
-def create_gradio_ui():
-    """创建Gradio Web UI"""
-    # 全局助手实例
-    assistant_state = {"assistant": None}
+def create_gradio_ui() -> gr.Blocks:
+    """创建网页界面"""
+    assistant: Optional[PDFLearningAssistant] = None
 
     def init_assistant(user_id: str) -> str:
         """初始化助手"""
+        nonlocal assistant
+        if assistant is not None and assistant.loading_document:
+            return "⏳ 文档正在加载，请等待完成后再初始化"
         if not user_id:
             user_id = "web_user"
-        assistant_state["assistant"] = PDFLearningAssistant(user_id=user_id)
+        assistant = PDFLearningAssistant(user_id=user_id)
         return f"✅ 助手已初始化 (用户: {user_id})"
 
-    def load_pdf(pdf_file) -> str:
+    def load_pdf(pdf_file: Optional[str], progress: gr.Progress = gr.Progress()) -> str:
         """加载PDF文件"""
-        if assistant_state["assistant"] is None:
+        if assistant is None:
             return "❌ 请先初始化助手"
 
         if pdf_file is None:
             return "❌ 请上传PDF文件"
 
-        # Gradio上传的文件是临时文件对象
-        pdf_path = pdf_file.name
-        result = assistant_state["assistant"].load_document(pdf_path)
+        # 上传组件使用 filepath 类型，直接返回文件路径。
+        def report_progress(value: float, description: str) -> None:
+            progress(value, desc=description)
+
+        result = assistant.load_document(pdf_file, progress=report_progress)
 
         if result["success"]:
             return f"✅ {result['message']}\n📄 文档: {result['document']}"
         else:
             return f"❌ {result['message']}"
 
-    def chat(message: str, history: List) -> Tuple[str, List]:
+    def chat(message: str, history: List[Dict[str, Any]]) -> Tuple[str, List[Dict[str, Any]]]:
         """聊天功能"""
-        if assistant_state["assistant"] is None:
-            return "", history + [[message, "❌ 请先初始化助手并加载文档"]]
+        if assistant is None:
+            return "", history + [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": "❌ 请先初始化助手并加载文档"},
+            ]
 
         if not message.strip():
             return "", history
@@ -283,33 +319,36 @@ def create_gradio_ui():
         # 判断是技术问题还是回顾问题
         if any(keyword in message for keyword in ["之前", "学过", "回顾", "历史", "记得"]):
             # 回顾学习历程
-            response = assistant_state["assistant"].recall(message)
+            response = assistant.recall(message)
             response = f"🧠 **学习回顾**\n\n{response}"
         else:
             # 技术问答
-            response = assistant_state["assistant"].ask(message)
+            response = assistant.ask(message)
             response = f"💡 **回答**\n\n{response}"
 
-        history.append([message, response])
+        history.extend([
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response},
+        ])
         return "", history
 
-    def add_note_ui(note_content: str, concept: str) -> str:
+    def add_note_ui(content: str, concept: str) -> str:
         """添加笔记"""
-        if assistant_state["assistant"] is None:
+        if assistant is None:
             return "❌ 请先初始化助手"
 
-        if not note_content.strip():
+        if not content.strip():
             return "❌ 笔记内容不能为空"
 
-        assistant_state["assistant"].add_note(note_content, concept or None)
-        return f"✅ 笔记已保存: {note_content[:50]}..."
+        assistant.add_note(content, concept or None)
+        return f"✅ 笔记已保存: {content[:50]}..."
 
     def get_stats_ui() -> str:
         """获取统计信息"""
-        if assistant_state["assistant"] is None:
+        if assistant is None:
             return "❌ 请先初始化助手"
 
-        stats = assistant_state["assistant"].get_stats()
+        stats = assistant.get_stats()
         result = "📊 **学习统计**\n\n"
         for key, value in stats.items():
             result += f"- **{key}**: {value}\n"
@@ -317,13 +356,13 @@ def create_gradio_ui():
 
     def generate_report_ui() -> str:
         """生成报告"""
-        if assistant_state["assistant"] is None:
+        if assistant is None:
             return "❌ 请先初始化助手"
 
-        report = assistant_state["assistant"].generate_report(save_to_file=True)
+        report = assistant.generate_report(save_to_file=True)
 
-        result = f"✅ 学习报告已生成\n\n"
-        result += f"**会话信息**\n"
+        result = "✅ 学习报告已生成\n\n"
+        result += "**会话信息**\n"
         result += f"- 会话时长: {report['session_info']['duration_seconds']:.0f}秒\n"
         result += f"- 加载文档: {report['learning_metrics']['documents_loaded']}\n"
         result += f"- 提问次数: {report['learning_metrics']['questions_asked']}\n"
@@ -334,8 +373,11 @@ def create_gradio_ui():
 
         return result
 
-    # 创建Gradio界面
-    with gr.Blocks(title="智能文档问答助手", theme=gr.themes.Soft()) as demo:
+    # 创建网页界面
+    blocks_options: Dict[str, Any] = {}
+    if "theme" in inspect.signature(gr.Blocks).parameters:
+        blocks_options["theme"] = gr.themes.Soft()
+    with gr.Blocks(title="智能文档问答助手", **blocks_options) as demo:
         gr.Markdown("""
         # 📚 智能文档问答助手
 
@@ -360,6 +402,8 @@ def create_gradio_ui():
             init_btn.click(init_assistant, inputs=[user_id_input], outputs=[init_output])
 
             gr.Markdown("### 📄 加载PDF文档")
+            # 扩展名保持小写，以匹配上传组件的文件筛选规则。
+            # noinspection SpellCheckingInspection,GrazieInspection
             pdf_upload = gr.File(
                 label="上传PDF文件",
                 file_types=[".pdf"],
@@ -371,10 +415,13 @@ def create_gradio_ui():
 
         with gr.Tab("💬 智能问答"):
             gr.Markdown("### 向文档提问或回顾学习历程")
+            chatbot_options: Dict[str, Any] = {}
+            if "type" in inspect.signature(gr.Chatbot).parameters:
+                chatbot_options["type"] = "messages"
             chatbot = gr.Chatbot(
                 label="对话历史",
                 height=400,
-                bubble_full_width=False
+                **chatbot_options
             )
             with gr.Row():
                 msg_input = gr.Textbox(
@@ -428,16 +475,22 @@ def create_gradio_ui():
 
 
 def main():
-    """主函数 - 启动Gradio Web UI"""
+    """主函数 - 启动网页界面"""
     print("\n" + "="*60)
     print("智能文档问答助手")
     print("="*60)
     print("正在启动Web界面...\n")
 
     demo = create_gradio_ui()
+    launch_options: Dict[str, Any] = {}
+    if "theme" in inspect.signature(demo.launch).parameters:
+        launch_options["theme"] = gr.themes.Soft()
     demo.launch(
+        **launch_options,
         server_name="0.0.0.0",
-        server_port=7860,
+        # 自动从默认端口开始寻找可用端口，避免重复运行时启动失败。
+        server_port=None,
+        inbrowser=True,
         share=False,
         show_error=True
     )

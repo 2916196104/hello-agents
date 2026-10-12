@@ -4,11 +4,17 @@ import contextlib
 import io
 from pathlib import Path
 import runpy
+import sys
 import unittest
 from unittest.mock import patch
 
 from hello_agents import Config, HelloAgentsLLM
-from my_plan_solve_agent import MyPlanAndSolveAgent, Planner
+
+# IDE 按包加载测试，直接运行脚本时则使用同目录导入。
+if __package__:
+    from .my_plan_solve_agent import MyPlanAndSolveAgent, Planner
+else:
+    from my_plan_solve_agent import MyPlanAndSolveAgent, Planner
 
 
 QUESTION = "周一卖出15个苹果，周二是两倍，周三比周二少5个，三天共多少个？"
@@ -162,7 +168,9 @@ class PlanAndSolveChecks(unittest.TestCase):
     def test_demo_runs_default_and_math_examples(self):
         llm = FakeLLM([PLAN, "30", "25", "70", f"python\n{PLAN}", "30", "25", "70"])
         source = Path(__file__).with_name("test_plan_solve_agent.py")
-        with patch("hello_agents.core.llm.HelloAgentsLLM", return_value=llm), \
+        # run_path 不会自动加入脚本目录，这里模拟直接运行示例时的搜索路径。
+        with patch("sys.path", [str(source.parent), *sys.path]), \
+                patch("hello_agents.core.llm.HelloAgentsLLM", return_value=llm), \
                 contextlib.redirect_stdout(io.StringIO()) as output:
             runpy.run_path(str(source), run_name="__main__")
         self.assertIn("最终结果: 70", output.getvalue())
