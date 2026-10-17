@@ -8,11 +8,13 @@ ContextBuilder 与 Agent 集成示例
 """
 from dotenv import load_dotenv
 load_dotenv()
-from hello_agents import SimpleAgent, HelloAgentsLLM, ToolRegistry
+from hello_agents import SimpleAgent, HelloAgentsLLM
 from hello_agents.context import ContextBuilder, ContextConfig
 #from hello_agents.tools import MemoryTool, RAGTool
 from hello_agents.core.message import Message
 from datetime import datetime
+import os
+from urllib.parse import urlsplit
 
 
 class ContextAwareAgent(SimpleAgent):
@@ -33,14 +35,14 @@ class ContextAwareAgent(SimpleAgent):
             config=ContextConfig(max_tokens=4000)
         )
 
-        self.conversation_history = []
+        self.conversation_history: list[Message] = []
 
-    def run(self, user_input: str) -> str:
+    def run(self, input_text: str, max_tool_iterations: int = 3, **kwargs) -> str:
         """运行 Agent,自动构建优化的上下文"""
 
         # 1. 使用 ContextBuilder 构建优化的上下文
         optimized_context = self.context_builder.build(
-            user_query=user_input,
+            user_query=input_text,
             conversation_history=self.conversation_history,
             system_instructions=self.system_prompt
         )
@@ -48,13 +50,13 @@ class ContextAwareAgent(SimpleAgent):
         # 2. 使用优化后的上下文调用 LLM
         messages = [
             {"role": "system", "content": optimized_context},
-            {"role": "user", "content": user_input}
+            {"role": "user", "content": input_text}
         ]
-        response = self.llm.invoke(messages).content
+        response = self.llm.invoke(messages, **kwargs)
 
         # 3. 更新对话历史
         self.conversation_history.append(
-            Message(content=user_input, role="user", timestamp=datetime.now())
+            Message(content=input_text, role="user", timestamp=datetime.now())
         )
         self.conversation_history.append(
             Message(content=response, role="assistant", timestamp=datetime.now())
@@ -63,7 +65,7 @@ class ContextAwareAgent(SimpleAgent):
         # 4. 将重要交互记录到记忆系统
         # self.memory_tool.run({
         #     "action": "add",
-        #     "content": f"Q: {user_input}\nA: {response[:200]}...",  # 摘要
+        #     "content": f"Q: {input_text}\nA: {response[:200]}...",  # 摘要
         #     "memory_type": "episodic",
         #     "importance": 0.6
         # })
@@ -77,7 +79,13 @@ def main():
     print("=" * 80 + "\n")
 
     # 配置 LLM
-    from hello_agents.core.llm import HelloAgentsLLM
+    # ModelScope 可直接访问，绕过本机代理以避免代理链路的 TLS 中断。
+    llm_host = urlsplit(os.getenv("LLM_BASE_URL", "")).hostname
+    if llm_host == "api-inference.modelscope.cn":
+        no_proxy = ",".join(filter(None, (
+            os.environ.get("no_proxy") or os.environ.get("NO_PROXY"), llm_host
+        )))
+        os.environ["NO_PROXY"] = os.environ["no_proxy"] = no_proxy
     llm = HelloAgentsLLM()
 
     # 使用示例

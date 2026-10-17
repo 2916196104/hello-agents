@@ -1,0 +1,42 @@
+[
+  {
+    "problem": "How many subsets of the set {1,2,3,...,12}, including the empty set, have the sum of their elements divisible by 7?",
+    "answer": 586,
+    "solution": "Let c_r be the number of elements of {1,...,12} congruent to r modulo 7. We have c_0=1 (the number 7), c_1=c_2=c_3=c_4=c_5=2, and c_6=1 (the number 6). The residue-0 element 7 simply doubles every residue count, so first count subsets of the other 11 numbers. Track the number of subsets by sum residue modulo 7. Start with counts [1,0,0,0,0,0,0]. Multiplying by (1+x)^2 gives [1,2,1,0,0,0,0]. Multiplying by (1+x^2)^2 gives [1,2,3,4,3,2,1]. Multiplying by (1+x^3)^2 gives [9,9,9,9,9,9,10]. Multiplying by (1+x^4)^2, using x^8=x modulo x^7-1, gives [37,36,36,38,36,36,37]. Multiplying by (1+x^5)^2, using x^10=x^3 modulo x^7-1, gives [145,148,145,147,146,146,147]. Finally multiplying by (1+x^6) gives [293,293,292,293,292,293,292]. Thus among the 11 non-residue-0 elements there are 293 subsets whose sum is 0 modulo 7. Including or not including the element 7 doubles this, so the answer is 293*2=586.",
+    "topic": "Combinatorics",
+    "id": "gen_aime_1",
+    "generated_at": "2026-10-16T21:18:49.630224"
+  },
+  {
+    "problem": "How many integers between 0 and 9999, inclusive, have the sum of their digits equal to 20 when written with leading zeros as necessary to make four digits? For example, 7 is written as 0007, whose digit sum is 7.",
+    "answer": 633,
+    "solution": "Represent each integer from 0 to 9999 as a four-digit string abcd, padding with leading zeros. We need count digit quadruples (a,b,c,d) with each digit from 0 to 9 and a+b+c+d=20. First ignore the upper bound 9. The number of nonnegative integer solutions to a+b+c+d=20 is C(23,3)=1771. Now subtract solutions where at least one digit is 10 or more. If a>=10, set a'=a-10. Then a'+b+c+d=10, which has C(13,3)=286 solutions. There are 4 choices for the oversized digit, so subtract 4*286=1144. If two digits are at least 10, say a>=10 and b>=10, then a'+b'+c+d=0, which has C(3,3)=1 solution. There are C(4,2)=6 pairs, so add back 6. Three digits cannot all be at least 10 because their sum would exceed 20. Thus by inclusion-exclusion the count is 1771-1144+6=633.",
+    "topic": "Combinatorics",
+    "id": "gen_aime_2",
+    "generated_at": "2026-10-16T21:19:11.790688"
+  },
+  {
+    "problem": "How many 4-element subsets of the set {1,2,3,...,15} have the sum of their elements divisible by 3?",
+    "answer": 455,
+    "solution": "Let the residue classes modulo 3 be: residue 0: {3,6,9,12,15} with 5 numbers, residue 1: {1,4,7,10,13} with 5 numbers, residue 2: {2,5,8,11,14} with 5 numbers. Let a0, a1, a2 be the numbers chosen from these classes. Then a0+a1+a2=4 and the sum is congruent to a1+2a2 modulo 3. We need a1+2a2 to be 0 modulo 3, which means a1 and a2 are congruent modulo 3. Enumerate all nonnegative triples summing to 4 that satisfy this condition. For a0=4: (a1,a2)=(0,0) gives C(5,4)*C(5,0)*C(5,0)=5. For a0=3: none. For a0=2: (1,1) gives C(5,2)*C(5,1)*C(5,1)=250. For a0=1: (3,0) gives C(5,1)*C(5,3)*C(5,0)=50 and (0,3) gives C(5,1)*C(5,0)*C(5,3)=50. For a0=0: (2,2) gives C(5,0)*C(5,2)*C(5,2)=100. Summing these yields 5+250+50+50+100=455.",
+    "topic": "Combinatorics",
+    "id": "gen_aime_3",
+    "generated_at": "2026-10-16T21:19:44.892924"
+  },
+  {
+    "problem": "Find the number of positive integers n with 1 <= n <= 1000 such that n! is divisible by n^2.",
+    "answer": 831,
+    "solution": "First test small values: n=1 works because 1!=1 is divisible by 1^2. n=2 fails because 2!=2 is not divisible by 4. n=3 fails because 6 is not divisible by 9. n=4 fails because 24 is not divisible by 16. n=5 fails because 120 is not divisible by 25. Now prove that every composite n >= 6 works. If n=ab with 1 < a < b < n, then n!, a, and b are distinct factors in n!, so n! contains n*a*b = n^2. If n=a^2 with a >= 3, then a, 2a, and n are distinct factors in n! because a < 2a < a^2 = n for a >= 3. Their product is a*2a*a^2 = 2n^2, so n^2 divides n!. Thus all composite n >= 6 work. For prime p >= 7, p! contains only one factor of p, so p^2 does not divide p!. Therefore the failing positive integers up to 1000 are 2, 3, 4, 5 and all primes p >= 7. The number of primes not exceeding 1000 is 168. So primes >= 7 number 168 - 3 = 165. Including 2, 3, 4, 5 gives 165 + 4 = 169 failing values. Hence the number of working integers is 1000 - 169 = 831.",
+    "topic": "Number Theory",
+    "id": "gen_aime_4",
+    "generated_at": "2026-10-16T21:20:17.636786"
+  },
+  {
+    "problem": "In triangle ABC, AB=13, BC=14, and CA=15. The incircle of triangle ABC is tangent to side BC at point D. Let E be the foot of the perpendicular from B to line AD. The area of triangle BDE can be written as m/n, where m and n are relatively prime positive integers. Find m+n.",
+    "answer": 361,
+    "solution": "Place B=(0,0) and C=(14,0). Since AB=13 and AC=15, let A=(x,y). Then x^2+y^2=169 and (x-14)^2+y^2=225. Subtracting gives -28x+196=56, so x=5. Then y=12. Thus A=(5,12). The semiperimeter of triangle ABC is s=(13+14+15)/2=21. The incircle touchpoint D on BC satisfies BD=s-CA=21-15=6, so D=(6,0). Line AD passes through A=(5,12) and D=(6,0), so its equation is 12x+y=72. The foot E of the perpendicular from B=(0,0) to this line is found by projecting: E=(864/145,72/145). The area of triangle BDE is (1/2)*BD*(vertical distance from E to BC) = (1/2)*6*(72/145)=216/145. Thus m=216, n=145, and m+n=361.",
+    "topic": "Geometry",
+    "id": "gen_aime_5",
+    "generated_at": "2026-10-16T21:22:53.903295"
+  }
+]

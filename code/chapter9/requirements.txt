@@ -1,0 +1,4 @@
+# 本章使用的 ContextBuilder 模块在 HelloAgents 0.2.2 中不存在。
+hello-agents[protocols]==0.2.8
+# 与环境中的 SciPy、ContourPy 保持兼容，避免降级 NumPy。
+numpy>=2,<2.8
