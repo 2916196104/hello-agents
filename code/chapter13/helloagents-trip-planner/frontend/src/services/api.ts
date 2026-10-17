@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { TripFormData, TripPlanResponse } from '@/types'
+import type { TripFormData, TripPlanResponse, TripRevisionRequest, TripRevisionResponse } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -45,6 +45,22 @@ export async function generateTripPlan(formData: TripFormData): Promise<TripPlan
   } catch (error: any) {
     console.error('生成旅行计划失败:', error)
     throw new Error(error.response?.data?.detail || error.message || '生成旅行计划失败')
+  }
+}
+
+/**
+ * 根据自然语言要求修改已有旅行计划
+ */
+export async function reviseTripPlan(request: TripRevisionRequest): Promise<TripRevisionResponse> {
+  try {
+    const response = await apiClient.post<TripRevisionResponse>('/api/trip/revise', request)
+    return response.data
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      const detail = error.response?.data?.detail
+      throw new Error(typeof detail === 'string' ? detail : '行程修改失败，请检查输入或稍后重试')
+    }
+    throw error
   }
 }
 

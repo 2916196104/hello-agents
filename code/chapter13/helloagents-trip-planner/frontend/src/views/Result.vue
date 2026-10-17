@@ -2,11 +2,11 @@
   <div class="result-container">
     <!-- 页面头部 -->
     <div class="page-header">
-      <a-button class="back-button" size="large" @click="goBack">
+      <a-button class="back-button" size="large" @click="goBack" :disabled="revising">
         ← 返回首页
       </a-button>
       <a-space size="middle">
-        <a-button v-if="!editMode" @click="toggleEditMode" type="default">
+        <a-button v-if="!editMode" @click="toggleEditMode" type="default" :disabled="revising">
           ✏️ 编辑行程
         </a-button>
         <a-button v-else @click="saveChanges" type="primary">
@@ -17,7 +17,7 @@
         </a-button>
 
         <!-- 导出按钮 -->
-        <a-dropdown v-if="!editMode">
+        <a-dropdown v-if="!editMode" :disabled="revising">
           <template #overlay>
             <a-menu>
               <a-menu-item key="image" @click="exportAsImage">
@@ -34,6 +34,30 @@
         </a-dropdown>
       </a-space>
     </div>
+
+    <a-card v-if="tripPlan && !editMode" title="用一句话调整行程" :bordered="false" class="revision-card">
+      <p>可调整已有景点、游览时长、餐饮和交通。只描述希望改变的部分，其他安排会保留。</p>
+      <a-textarea
+        v-model:value="revisionInstruction"
+        aria-label="行程修改要求"
+        placeholder="例如：第二天太累了，减少一个景点，酒店不变"
+        :auto-size="{ minRows: 2, maxRows: 5 }"
+        :maxlength="2000"
+        show-count
+        :disabled="revising"
+      />
+      <div class="revision-actions">
+        <a-checkbox v-model:checked="keepHotels" :disabled="revising">保留酒店和住宿安排</a-checkbox>
+        <a-space>
+          <a-button v-if="previousRevision" @click="undoRevision" :disabled="revising">撤销上次 AI 修改</a-button>
+          <a-button type="primary" :loading="revising" :disabled="!revisionInstruction.trim()" @click="revisePlan">
+            {{ revising ? '正在调整行程' : 'AI 修改行程' }}
+          </a-button>
+        </a-space>
+      </div>
+      <a-alert v-if="revisionError" class="revision-feedback" type="error" show-icon :message="revisionError" />
+      <a-alert v-if="revisionSummary" class="revision-feedback" type="success" show-icon :message="revisionSummary" />
+    </a-card>
 
     <div v-if="tripPlan" class="content-wrapper">
       <!-- 侧边导航 -->
@@ -308,7 +332,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
@@ -316,6 +340,7 @@ import AMapLoader from '@amap/amap-jsapi-loader'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import type { TripPlan } from '@/types'
+import { reviseTripPlan } from '@/services/api'
 
 const router = useRouter()
 const tripPlan = ref<TripPlan | null>(null)
@@ -324,6 +349,13 @@ const originalPlan = ref<TripPlan | null>(null)
 const attractionPhotos = ref<Record<string, string>>({})
 const activeSection = ref('overview')
 const activeDays = ref<number[]>([0]) // 默认展开第一天
+const revisionInstruction = ref('')
+const keepHotels = ref(true)
+const revising = ref(false)
+const revisionError = ref('')
+const revisionSummary = ref('')
+const previousRevision = ref<TripPlan | null>(null)
+let disposed = false
 let map: any = null
 
 onMounted(async () => {
@@ -337,6 +369,65 @@ onMounted(async () => {
     initMap()
   }
 })
+
+onUnmounted(() => {
+  disposed = true
+  if (map) map.destroy()
+})
+
+const refreshPlanView = async () => {
+  if (map) {
+    map.destroy()
+    map = null
+  }
+  await nextTick()
+  if (!disposed) await Promise.all([loadAttractionPhotos(), initMap()])
+}
+
+const revisePlan = async () => {
+  if (!tripPlan.value || revising.value || editMode.value) return
+  const instruction = revisionInstruction.value.trim()
+  if (!instruction) return
+
+  revising.value = true
+  revisionError.value = ''
+  revisionSummary.value = ''
+  const snapshot: TripPlan = JSON.parse(JSON.stringify(tripPlan.value))
+  try {
+    const response = await reviseTripPlan({
+      trip_plan: snapshot,
+      instruction,
+      keep_hotels: keepHotels.value
+    })
+    if (disposed) return
+    if (!response.success || !response.data) throw new Error(response.message || '没有收到修改后的行程')
+
+    sessionStorage.setItem('tripPlan', JSON.stringify(response.data))
+    previousRevision.value = snapshot
+    tripPlan.value = response.data
+    activeDays.value = response.changed_days
+    revisionSummary.value = response.message
+    revisionInstruction.value = ''
+    await refreshPlanView()
+    message.success('行程已更新')
+  } catch (error: unknown) {
+    if (!disposed) revisionError.value = error instanceof Error ? error.message : '行程修改失败，请稍后重试'
+  } finally {
+    revising.value = false
+  }
+}
+
+const undoRevision = async () => {
+  if (!previousRevision.value || revising.value) return
+  sessionStorage.setItem('tripPlan', JSON.stringify(previousRevision.value))
+  tripPlan.value = previousRevision.value
+  previousRevision.value = null
+  revisionSummary.value = ''
+  revisionError.value = ''
+  activeDays.value = [0]
+  await refreshPlanView()
+  message.info('已撤销上次 AI 修改')
+}
 
 const goBack = () => {
   router.push('/')
@@ -366,6 +457,9 @@ const saveChanges = () => {
   if (tripPlan.value) {
     sessionStorage.setItem('tripPlan', JSON.stringify(tripPlan.value))
   }
+  previousRevision.value = null
+  revisionSummary.value = ''
+  revisionError.value = ''
   message.success('修改已保存')
 
   // 重新初始化地图以反映更改
@@ -432,6 +526,7 @@ const loadAttractionPhotos = async () => {
 
   tripPlan.value.days.forEach(day => {
     day.attractions.forEach(attraction => {
+      if (attractionPhotos.value[attraction.name]) return
       const promise = fetch(`http://localhost:8000/api/poi/photo?name=${encodeURIComponent(attraction.name)}`)
         .then(res => res.json())
         .then(data => {
@@ -794,6 +889,7 @@ const initMap = async () => {
       version: '2.0',
       plugins: ['AMap.Marker', 'AMap.Polyline', 'AMap.InfoWindow']
     })
+    if (disposed) return
 
     // 创建地图实例
     map = new AMap.Map('amap-container', {
@@ -971,6 +1067,25 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 .main-content {
   flex: 1;
   min-width: 0;
+}
+
+.revision-card {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+  border-radius: 12px;
+}
+
+.revision-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.revision-feedback {
+  margin-top: 16px;
 }
 
 /* 景点图片样式 */

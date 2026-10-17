@@ -49,3 +49,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# 保留行程修改功能的离线回归测试。
+!tests/test_trip_revision.py
+

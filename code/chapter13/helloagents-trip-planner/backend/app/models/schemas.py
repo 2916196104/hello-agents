@@ -157,6 +157,23 @@ class TripPlanResponse(BaseModel):
     data: Optional[TripPlan] = Field(default=None, description="旅行计划数据")
 
 
+class TripRevisionRequest(BaseModel):
+    """基于现有计划的自然语言修改请求"""
+    trip_plan: TripPlan
+    instruction: str = Field(..., min_length=1, max_length=2000, description="行程修改要求")
+    keep_hotels: bool = Field(default=True, description="保留原酒店和住宿安排")
+
+    @field_validator("instruction", mode="before")
+    @classmethod
+    def strip_instruction(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class TripRevisionResponse(TripPlanResponse):
+    """修改后的完整行程及发生变更的日期索引"""
+    changed_days: List[int] = Field(default_factory=list)
+
+
 class POIInfo(BaseModel):
     """POI信息"""
     id: str = Field(..., description="POI ID")

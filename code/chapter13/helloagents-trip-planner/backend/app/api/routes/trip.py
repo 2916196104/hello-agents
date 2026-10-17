@@ -4,9 +4,13 @@ from fastapi import APIRouter, HTTPException
 from ...models.schemas import (
     TripRequest,
     TripPlanResponse,
-    ErrorResponse
+    TripRevisionRequest,
+    TripRevisionResponse,
 )
 from ...agents.trip_planner_agent import get_trip_planner_agent
+from ...agents.trip_revision_agent import (
+    TripRevisionAgent, RevisionValidationError, RevisionGenerationError,
+)
 
 router = APIRouter(prefix="/trip", tags=["旅行规划"])
 
@@ -59,6 +63,24 @@ async def plan_trip(request: TripRequest):
             status_code=500,
             detail=f"生成旅行计划失败: {str(e)}"
         )
+
+
+@router.post(
+    "/revise",
+    response_model=TripRevisionResponse,
+    summary="自然语言修改行程",
+    description="修改已有行程并校验日期、景点和酒店约束，失败时保留原行程",
+)
+def revise_trip(request: TripRevisionRequest):
+    # 同步模型调用交由 FastAPI 的工作线程执行，避免阻塞其他请求。
+    try:
+        return TripRevisionAgent().revise_trip(request)
+    except RevisionValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RevisionGenerationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="行程修改服务暂时不可用，请稍后重试") from exc
 
 
 @router.get(

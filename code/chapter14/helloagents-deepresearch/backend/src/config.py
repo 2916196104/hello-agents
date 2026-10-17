@@ -1,8 +1,13 @@
 import os
 from enum import Enum
+from pathlib import Path
 from typing import Any, Optional
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
 class SearchAPI(Enum):

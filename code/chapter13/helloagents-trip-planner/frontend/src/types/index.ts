@@ -93,3 +93,13 @@ export interface TripPlanResponse {
   data?: TripPlan
 }
 
+export interface TripRevisionRequest {
+  trip_plan: TripPlan
+  instruction: string
+  keep_hotels: boolean
+}
+
+export interface TripRevisionResponse extends TripPlanResponse {
+  changed_days: number[]
+}
+
