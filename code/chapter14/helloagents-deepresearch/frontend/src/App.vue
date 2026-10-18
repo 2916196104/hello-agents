@@ -134,15 +134,12 @@
       </aside>
 
       <!-- 右侧：研究结果 -->
-      <section
-        class="panel panel-result"
-        v-if="todoTasks.length || reportMarkdown || progressLogs.length"
-      >
+      <section class="panel panel-result">
         <header class="status-bar">
           <div class="status-main">
             <div class="status-chip" :class="{ active: loading }">
               <span class="dot"></span>
-              {{ loading ? "研究进行中" : "研究流程完成" }}
+              {{ error ? "研究失败" : loading ? "研究进行中" : "研究流程完成" }}
             </div>
             <span class="status-meta">
               任务进度：{{ completedTasks }} / {{ totalTasks || todoTasks.length || 1 }}
@@ -150,11 +147,19 @@
             </span>
           </div>
           <div class="status-controls">
+            <button v-if="loading" class="secondary-btn" @click="cancelResearch">
+              取消研究
+            </button>
             <button class="secondary-btn" @click="logsCollapsed = !logsCollapsed">
               {{ logsCollapsed ? "展开流程" : "收起流程" }}
             </button>
           </div>
         </header>
+
+        <p v-if="error" class="error-chip" role="alert">{{ error }}</p>
+        <p v-else-if="loading && !progressLogs.length" class="hint muted">
+          正在连接研究服务，准备规划任务…
+        </p>
 
         <div class="timeline-wrapper" v-show="!logsCollapsed && progressLogs.length">
           <transition-group name="timeline" tag="ul" class="timeline">
@@ -941,7 +946,7 @@ const handleSubmit = async () => {
       { signal: controller.signal }
     );
 
-    if (!reportMarkdown.value) {
+    if (!reportMarkdown.value && !error.value) {
       reportMarkdown.value = "暂无生成的报告";
     }
   } catch (err) {
