@@ -1,0 +1,6 @@
+.venv/
+.env
+data/
+reports/
+__pycache__/
+!tests/test_*.py

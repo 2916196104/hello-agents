@@ -59,10 +59,60 @@
         "report"
       ],
       "created_at": "2026-10-17T22:37:43.870344"
+    },
+    {
+      "id": "note_20261018_210948_6",
+      "title": "行业趋势与市场规模",
+      "type": "task_state",
+      "tags": [
+        "deep_research",
+        "task_1"
+      ],
+      "created_at": "2026-10-18T21:09:48.397943"
+    },
+    {
+      "id": "note_20261018_210948_7",
+      "title": "岗位需求与招聘数据",
+      "type": "task_state",
+      "tags": [
+        "deep_research",
+        "task_2"
+      ],
+      "created_at": "2026-10-18T21:09:48.402044"
+    },
+    {
+      "id": "note_20261018_210948_8",
+      "title": "任务 3: 技能要求与薪资水平",
+      "type": "task_state",
+      "tags": [
+        "deep_research",
+        "task_3"
+      ],
+      "created_at": "2026-10-18T21:09:48.403050"
+    },
+    {
+      "id": "note_20261018_210948_9",
+      "title": "未来3-5年发展前景",
+      "type": "task_state",
+      "tags": [
+        "deep_research",
+        "task_4"
+      ],
+      "created_at": "2026-10-18T21:09:48.405051"
+    },
+    {
+      "id": "note_20261018_211436_10",
+      "title": "研究报告：agent开发岗位目前前景怎么样？",
+      "type": "conclusion",
+      "tags": [
+        "deep_research",
+        "report"
+      ],
+      "created_at": "2026-10-18T21:14:36.042965"
     }
   ],
   "metadata": {
     "created_at": "2026-10-17T22:21:32.407102",
-    "total_notes": 6
+    "total_notes": 11
   }
 }

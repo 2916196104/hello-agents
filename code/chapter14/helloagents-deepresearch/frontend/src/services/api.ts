@@ -1,5 +1,5 @@
 const baseURL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8001";
 
 export interface ResearchRequest {
   topic: string;
@@ -28,6 +28,13 @@ export async function runResearchStream(
     },
     body: JSON.stringify(payload),
     signal: options.signal
+  }).catch((error: unknown) => {
+    if (options.signal?.aborted) {
+      throw error;
+    }
+    throw new Error(
+      `无法连接研究后端 ${baseURL}，请确认后端已启动，并核对后端 PORT 与前端 VITE_API_BASE_URL。`
+    );
   });
 
   if (!response.ok) {

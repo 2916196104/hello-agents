@@ -1,0 +1,3 @@
+source,source_record_id,product_id,text,rating,published_at,evidence_ref
+sample-file,sample-001,示例商品,产品好用但是物流慢。,3,2026-09-20T12:00:00+08:00,sample_reviews.csv:record=1
+sample-file,sample-002,示例商品,包装完好，质量很好。,5,2026-09-21T12:00:00+08:00,sample_reviews.csv:record=2
